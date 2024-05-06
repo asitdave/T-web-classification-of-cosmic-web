@@ -1,6 +1,6 @@
 # This script contains functions that help in computing the tidal shear tensor for a given density field 
 # and classifies the structures based on the T-web classification scheme. 
-# The library also provides functions to calculate the eigenvalues and eigenvectors of the tidal shear tensor, 
+# It provides functions to calculate the eigenvalues and eigenvectors of the tidal shear tensor, 
 # as well as the traceless tidal shear tensor.
 
 #-------------------------------------------------------------------------------------------------------------#
@@ -18,64 +18,71 @@ import concurrent.futures
 from numba import jit
 import shutil
 
+#-------------------------------------------------------------------------------------------------------------#
 
-def read_input_file(file_path):
-   with open("input_params.txt", "r") as file:
-    for line in file:
-      # Remove comments and leading/trailing spaces
-      line = line.strip().split("#")[0]  # Split by comment symbol if needed
+def read_input_file(file_path: str) -> list:
+   with open(file_path, "r") as file:
+      for line in file:
+          # Remove comments and leading/trailing spaces
+          line = line.strip().split("#")[0]  # Split by comment symbol if needed
 
-      # Check for keywords and extract values
-      if line.startswith("Path of the snapshot file"):
-        snapshot_path = line.split(":")[1].strip()
-      elif line.startswith("Path where you want to save the results"):
-        save_path = line.split(":")[1].strip()
-      elif line.startswith("Enter the grid size"):
-        grid_size = int(line.split(":")[1].strip())
-      elif line.startswith("Create the density field"):
-        create_density = line.split(":")[1].strip().lower() == "yes"
-      elif line.startswith("Path to load the density field"):
-        # Check if value exists (optional section)
-        if ":" in line:
-          density_path = None if (line.split(":")[1].strip()) == '' else int(line.split(":")[1].strip())
-      elif line.startswith("Smooth density field"):
-        smooth_density = line.split(":")[1].strip().lower() == "yes"
-      elif line.startswith("Smoothing scales"):
-        smoothing_scales = [float(x) for x in line.split(":")[1].strip().split()]
-      elif line.startswith("Calculate potential field"):
-        calculate_potential = line.split(":")[1].strip().lower() == "yes"
-      elif line.startswith("Calculate traceless tidal tensor"):
-        calculate_traceless_tidal = line.split(":")[1].strip().lower() == "yes"
+          # Check for keywords and extract values
+          if line.startswith("Path to the snapshot file"):
+            snapshot_path = line.split(":")[1].strip()
 
-    # Check for the possible incorrect/inconsistent input values
-    # Additional logic based on retrieved values
-    if density_path is None and create_density is False:
-        raise ValueError("No density field provided!")
-    
-    if not os.path.exists(snapshot_path):
-            raise ValueError('Please enter a valid snapshot path. File does not exist.')
-    
-    if not os.path.exists(save_path):
-            raise ValueError('Please enter a valid file path to save the result. File does not exist.')
-    
-    try:
-      grid_size = float(input('Enter the grid size: '))
+          elif line.startswith("Path where you want to save the results"):
+            save_path = line.split(":")[1].strip()
+          
+          elif line.startswith("Enter the grid size"):
+            grid_size = int(line.split(":")[1].strip())
+          
+          elif line.startswith("Create the density field"):
+            create_density = line.split(":")[1].strip().lower() == "yes"
+          
+          elif line.startswith("Path to load the density field"):
+            # Check if value exists (optional section)
+            if ":" in line:
+              density_path = None if (line.split(":")[1].strip()) == '' else int(line.split(":")[1].strip())
+          
+          elif line.startswith("Smooth density field"):
+            smooth_density = line.split(":")[1].strip().lower() == "yes"
+          
+          elif line.startswith("Smoothing scales"):
+            smoothing_scales = [float(x) for x in line.split(":")[1].strip().split()]
+          
+          elif line.startswith("Calculate potential field"):
+            calculate_potential = line.split(":")[1].strip().lower() == "yes"
+          
+          elif line.startswith("Calculate traceless tidal tensor"):
+            calculate_traceless_tidal = line.split(":")[1].strip().lower() == "yes"
 
-      if grid_size <= 0:
-        raise ValueError('Please enter a positive value.')
-    
-    except ValueError:
-      raise ValueError('Please enter a valid grid size. (float)')
-    
-    if not os.path.exists(density_path):
-            raise ValueError('Please enter a valid density field file path. File does not exist.')
+          # Check for the possible incorrect/inconsistent input values
+          # Additional logic based on retrieved values
+          if density_path is None and create_density is False:
+              raise ValueError("No density field provided!")
+          
+          if not os.path.exists(snapshot_path):
+                  raise ValueError('Please enter a valid snapshot path. File does not exist.')
+          
+          if not os.path.exists(save_path):
+                  raise ValueError('Please enter a valid file path to save the result. File does not exist.')
 
-    
-    return [snapshot_path, save_path, grid_size, create_density, density_path, smooth_density, smoothing_scales, calculate_potential, calculate_traceless_tidal]
+          if grid_size <= 0:
+            raise ValueError('Please enter a positive value.')
+              
+          for path in [snapshot_path, save_path]:
+              if not os.path.exists(path):
+                  raise ValueError(f"Please enter a valid path. {path} does not exist.")
 
+          if density_path is not None:
+              if not os.path.exists(density_path):
+                  raise ValueError(f"Please enter a valid path. {density_path} does not exist.")
 
+      return [snapshot_path, save_path, grid_size, create_density, density_path, smooth_density, smoothing_scales, calculate_potential, calculate_traceless_tidal]
 
-def load_snapshot(snapshot_path):
+#-------------------------------------------------------------------------------------------------------------#
+
+def load_snapshot(snapshot_path: str) -> pynbody.snapshot:
     """
     Load the cosmological simulation snapshot.
 
@@ -97,34 +104,36 @@ def load_snapshot(snapshot_path):
 
     return snap
 
+#-------------------------------------------------------------------------------------------------------------#
 
-def extract_simdict_values(simdict):
-  """Extracts values from a pynbody SimDict in float format.
+def extract_simdict_values(simdict: pynbody.simdict.SimDict) -> dict:
+    """Extracts values from a pynbody SimDict in float format.
 
-  Args:
-      simdict: A pynbody.simdict.SimDict object.
+    Args:
+        simdict: A pynbody.simdict.SimDict object.
 
-  Returns:
-      A dictionary containing the following keys and values in float format:
-          boxsize: (float) Box size in Mpc/h
-          time: (float) Time in seconds
-          a: (float) Scale factor
-          h: (float) Hubble parameter
-          omega_m: (float) Matter density parameter
-          omega_l: (float) Dark energy density parameter
-  """
+    Returns:
+        A dictionary containing the following keys and values in float format:
+            boxsize: (float) Box size in Mpc/h
+            time: (float) Time in seconds
+            a: (float) Scale factor
+            h: (float) Hubble parameter
+            omega_m: (float) Matter density parameter
+            omega_l: (float) Dark energy density parameter
+    """
 
-  results = {}
-  for key, value in simdict.items():
-    if key in ['omegaM0', 'omegaL0', 'a', 'h']:
-      results[key] = float(value)
-    else:
-      results[key] = float(str(value).split()[0])
+    results = {}
+    for key, value in simdict.items():
+      if key in ['omegaM0', 'omegaL0', 'a', 'h']:
+        results[key] = float(value)
+      else:
+        results[key] = float(str(value).split()[0])
 
-  return results
+    return results
 
+#-------------------------------------------------------------------------------------------------------------#
 
-def load_data(file_path):
+def load_data(file_path: str) -> np.ndarray:
     """
     Load the data from the specified file path.
 
@@ -136,46 +145,44 @@ def load_data(file_path):
     - data: numpy.ndarray
       The loaded data.
     """
-    
-    if type(file_path) != str:
-      return ValueError("The file path should be a string.")
 
     try:
-      data = np.load(file_path)
+      loaded_data = np.load(file_path)
 
     except ValueError:
       print("Error loading the data from the file path.")
 
-    return data
+    return loaded_data
 
+#-------------------------------------------------------------------------------------------------------------#
 
-def create_directory(directory_path):
-  """
-  Creates a directory, overwriting any existing directory with the same name.
+def create_directory(directory_path: str) -> None:
+    """
+    Creates a directory, overwriting any existing directory with the same name.
 
-  Args:
-      directory_path: str
-          Path to the directory to create.
+    Args:
+        directory_path: str
+            Path to the directory to create.
 
-  Returns:
-      None
-  """
-  try:
-    os.makedirs(directory_path)  # Attempt to create directories recursively
+    Returns:
+        None
+    """
+    try:
+      os.makedirs(directory_path)  # Attempt to create directories recursively
 
-  except OSError as e:
-    if os.path.exists(directory_path) and os.path.isdir(directory_path):
-      # Overwrite existing directory if it's a directory
-      print(f"Warning: Overwriting existing directory: {directory_path}")
-      # You can add additional logic here to prompt for confirmation before overwriting
-      shutil.rmtree(directory_path)  # Remove the existing directory
-      os.makedirs(directory_path)  # Create the directory again
-    else:
-      raise e  # Re-raise the original error for other OSError cases
+    except OSError as e:
+        if os.path.exists(directory_path) and os.path.isdir(directory_path):
+          # Overwrite existing directory if it's a directory
+          print(f"Warning: Overwriting existing directory: {directory_path}")
+          # You can add additional logic here to prompt for confirmation before overwriting
+          shutil.rmtree(directory_path)  # Remove the existing directory
+          os.makedirs(directory_path)  # Create the directory again
+        else:
+          raise e  # Re-raise the original error for other OSError cases
 
+#-------------------------------------------------------------------------------------------------------------#
 
-
-def save_data(data, file_path):
+def save_data(data: np.ndarray, file_path: str) -> None:
     """
     Save the given data to the specified file path.
 
@@ -185,9 +192,6 @@ def save_data(data, file_path):
     - file_path: str
       The file path where the data will be saved.
     """
-    
-    if type(file_path) != str:
-      return ValueError("The file path should be a string.")
 
     try:
       np.save(file_path, data)
@@ -195,8 +199,9 @@ def save_data(data, file_path):
     except ValueError:
       print("Error saving the data to the file path.")
 
+#-------------------------------------------------------------------------------------------------------------#
 
-def compute_density_field(snapshot, grid_size, box_size, mas='CIC', verbose=True):
+def compute_density_field(snapshot: pynbody.snapshot, grid_size: int, box_size, mas='CIC', verbose=True):
     """
     Compute the density field from a cosmological simulation snapshot.
 
@@ -216,6 +221,7 @@ def compute_density_field(snapshot, grid_size, box_size, mas='CIC', verbose=True
     - delta: numpy.ndarray
       The computed density field representing density contrast in each voxel.
     """
+
     pos = snapshot["pos"] # Position of particles
 
     # Construct a 3D grid for the density field
@@ -228,14 +234,14 @@ def compute_density_field(snapshot, grid_size, box_size, mas='CIC', verbose=True
 
     return delta
 
+#-------------------------------------------------------------------------------------------------------------#
 
-
-def smooth_field(field, smoothing_scale, box_size, grid_size):
+def smooth_field(input_field: np.ndarray, smoothing_scale: float, box_size, grid_size: int):
     """
     Smooth the given field using Gaussian filtering.
 
     Parameters:
-    - field: numpy.ndarray
+    - input_field: numpy.ndarray
       The field to be smoothed.
     - smoothing_scale: float
       The scale of Gaussian smoothing.
@@ -248,25 +254,26 @@ def smooth_field(field, smoothing_scale, box_size, grid_size):
     - smoothed_field: numpy.ndarray
       The smoothed field.
     """
+
     sigma = smoothing_scale
     pixel_scale = box_size / grid_size
     sigma_pixels = sigma / pixel_scale
 
     # mode : {'reflect', 'constant', 'nearest', 'mirror', 'wrap'}, optional
-    return gaussian_filter(field, sigma=sigma_pixels, mode='wrap', cval=0.0)
+    return gaussian_filter(input_field, sigma=sigma_pixels, mode='wrap', cval=0.0)
 
+#-------------------------------------------------------------------------------------------------------------#
 
-
-def plot_field(field, title, dim, sm_scale, slice=0):
+def plot_field(input_field: np.ndarray, name_sm_scale: str, dim: str, sm_scale: float, slice: int, filepath: str):
     """
     Plot the given field.
 
     Parameters:
-    - field: numpy.ndarray
+    - input_field: numpy.ndarray
       The field to be plotted.
     - title: str
       The title of the plot.
-    - slice: int, optional (default=0)
+    - slice: int, optional (default= half grid size)
       The slice of the field to be plotted.
     - axis: int, optional (default=2)
       The axis along which the slice is taken.
@@ -276,7 +283,7 @@ def plot_field(field, title, dim, sm_scale, slice=0):
 
     # Plot for zero smoothening density field
     plt.figure(figsize = (2,2), dpi = 200)
-    delplot1=np.log10(field+1+eps)
+    delplot1=np.log10(input_field+1+eps)
 
     if dim == ('yz' or 'zy'):
       slic1=np.mean(delplot1[N:slice+N, :, :],axis=0)
@@ -290,11 +297,13 @@ def plot_field(field, title, dim, sm_scale, slice=0):
     plt.imshow(slic1, cmap = 'inferno')
     plt.axis('off')
     plt.title(r'$R_s = {sm_scale}~h^{-1} Mpc$'.format(sm_scale=str(sm_scale)))
-    plt.show()
+    
+    save_path = os.path.join(filepath, f'{dim}_plane_{name_sm_scale}.png')
+    plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
 
+#-------------------------------------------------------------------------------------------------------------#
 
-
-def calculate_tidal_tensor(density_field, calculate_potential=False):
+def calculate_tidal_tensor(density_field: np.ndarray, calculate_potential=False) -> np.ndarray:
     """
     Calculate the tidal tensor from the given density field.
 
@@ -370,8 +379,9 @@ def calculate_tidal_tensor(density_field, calculate_potential=False):
     else:
       return tidal_tensor
 
+#-------------------------------------------------------------------------------------------------------------#
 
-def make_traceless(matrix):
+def make_traceless(matrix: np.ndarray) -> np.ndarray:
     """
     Make the given matrix traceless.
 
@@ -386,9 +396,9 @@ def make_traceless(matrix):
     traceless_matrix = matrix - (np.trace(matrix) / 3) * np.identity(3)
     return traceless_matrix
 
+#-------------------------------------------------------------------------------------------------------------#
 
-
-def calculate_traceless_tidal_shear(tidal_tensor, grid_size):
+def calculate_traceless_tidal_shear(tidal_tensor: np.ndarray, grid_size: int) -> np.ndarray:
     """
     Calculate the traceless tidal shear from the given tidal tensor.
 
@@ -408,8 +418,9 @@ def calculate_traceless_tidal_shear(tidal_tensor, grid_size):
         traceless.append(make_traceless(tid[i]))
     return np.array(traceless).reshape(grid_size, grid_size, grid_size, 3, 3)
 
+#-------------------------------------------------------------------------------------------------------------#
 
-def save_data(data, file_path):
+def save_data(data: np.ndarray, file_path: str) -> None:
     """
     Save the given data to the specified file path.
 
@@ -419,9 +430,6 @@ def save_data(data, file_path):
     - file_path: str
       The file path where the data will be saved.
     """
-    
-    if type(file_path) != str:
-      return ValueError("The file path should be a string.")
 
     try:
       np.save(file_path, data)
@@ -429,14 +437,9 @@ def save_data(data, file_path):
     except ValueError:
       print("Error saving the data to the file path.")
 
+#-------------------------------------------------------------------------------------------------------------#
 
-
-
-
-
-
-
-def load_all_npy_files(folder_path):
+def load_all_npy_files(folder_path: str) -> list:
   """
   Loads all files with the .npy extension from a folder using a loop.
 
@@ -461,11 +464,11 @@ def load_all_npy_files(folder_path):
 
   return data_list
 
-
+#-------------------------------------------------------------------------------------------------------------#
 
 # Define the JIT-compiled function
 @jit(nopython=True)
-def calculate_eigenvalues_and_vectors(tidal_shear_tensor, grid_size):
+def calculate_eigenvalues_and_vectors_jit(tidal_shear_tensor, grid_size):
     eigenvalues = np.zeros((grid_size, grid_size, grid_size, 3))
     eigenvectors = np.zeros((grid_size, grid_size, grid_size, 3, 3))
 
@@ -481,9 +484,40 @@ def calculate_eigenvalues_and_vectors(tidal_shear_tensor, grid_size):
 
     return eigenvalues, eigenvectors
 
+#-------------------------------------------------------------------------------------------------------------#
+from multiprocessing import Pool
 
+def calculate_eigenvalues_and_vectors_worker(args):
+    i, j, k, tidal_shear_tensor = args
+    eigenvalues, eigenvectors = np.linalg.eig(tidal_shear_tensor)
+    sorted_indices = np.argsort(eigenvalues)[::-1]
+    return (eigenvalues[sorted_indices], eigenvectors[sorted_indices])
 
-def classify_structure(eigenvalues):
+def calculate_eigenvalues_and_vectors(tidal_shear_tensor, grid_size):
+    eigenvalues = np.zeros((grid_size, grid_size, grid_size, 3))
+    eigenvectors = np.zeros((grid_size, grid_size, grid_size, 3, 3))
+
+    pool = Pool()  # Create a multiprocessing Pool
+    results = []
+
+    for i in range(grid_size):
+        for j in range(grid_size):
+            for k in range(grid_size):
+                args = (i, j, k, tidal_shear_tensor[i, j, k])
+                results.append(pool.apply_async(calculate_eigenvalues_and_vectors_worker, (args,)))
+
+    pool.close()
+    pool.join()
+
+    for i, result in enumerate(results):
+        i_idx, j_idx, k_idx = np.unravel_index(i, (grid_size, grid_size, grid_size))
+        eigenvalues[i_idx, j_idx, k_idx], eigenvectors[i_idx, j_idx, k_idx] = result.get()
+
+    return eigenvalues, eigenvectors
+
+#-------------------------------------------------------------------------------------------------------------#
+
+def classify_structure(eigenvalues: np.ndarray) -> int:
     ''' 
     Uses T-web classification scheme.
     Classifies each voxel as a part of Void, Sheet, Filament, or Node
@@ -501,7 +535,51 @@ def classify_structure(eigenvalues):
         return 2 # "Filament"
     elif num_positive == 3:
         return 3 # "Cluster"
+    
 
+
+def classify_structure_worker(args):
+    eigenvalues_slice = args
+    classification_matrix_slice = np.zeros_like(eigenvalues_slice)
+
+    for i in range(eigenvalues_slice.shape[0]):
+        for j in range(eigenvalues_slice.shape[1]):
+            for k in range(eigenvalues_slice.shape[2]):
+                classification_matrix_slice[i, j, k] = classify_structure(eigenvalues_slice[i, j, k])
+
+    return classification_matrix_slice
+
+
+# Define a function to classify structures using multiprocessing
+def classify_structures(tidal_eigenvalues: np.ndarray) -> np.ndarray:
+    total_files = tidal_eigenvalues.shape[0]
+    grid_size = tidal_eigenvalues.shape[1]
+    pool = Pool()  # Create a multiprocessing Pool
+    results = []
+
+    for num_file in range(total_files):
+        results.append(pool.apply_async(classify_structure_worker, (tidal_eigenvalues[num_file],)))
+
+    pool.close()
+    pool.join()
+
+    classification_matrices = []
+
+    for result in results:
+        classification_matrices.append(result.get())
+
+    return np.array(classification_matrices)
+
+# # Assuming tidal_eigenvalues is your eigenvalues data
+# classified_structures = classify_structures(tidal_eigenvalues)
+
+# # Saving the classification matrices
+# for num_file, classification_matrix in enumerate(classified_structures):
+#     save_path_classification = os.path.join(new_directory_path, f'classification_matrix_{num_file}.npy')
+#     np.save(save_path_classification, classification_matrix)
+
+
+#-------------------------------------------------------------------------------------------------------------#
 
 def calculate_volume_fraction(classification_matrix, label):
     """
@@ -516,6 +594,7 @@ def calculate_volume_fraction(classification_matrix, label):
     """
     return np.sum(classification_matrix.flatten() == label) / np.prod(classification_matrix.shape)
 
+#-------------------------------------------------------------------------------------------------------------#
 
 def calculate_volume_fractions(classification_matrix):
     """
@@ -538,7 +617,7 @@ def calculate_volume_fractions(classification_matrix):
     
     return volume_fractions
 
-
+#-------------------------------------------------------------------------------------------------------------#
 
 def slice_density_field(density_field, slice_index):
     """
@@ -568,8 +647,7 @@ def slice_density_field(density_field, slice_index):
     
     return d_field
 
-
-
+#-------------------------------------------------------------------------------------------------------------#
 
 def get_pos(structure, projection, slice_index, classification, grid_size=512, box_size=100):
     
@@ -712,7 +790,7 @@ def get_pos(structure, projection, slice_index, classification, grid_size=512, b
     else:
         print('ValueError')
         
-
+#-------------------------------------------------------------------------------------------------------------#
 
 def get_class_env_pos(classification, slice_index):
     
@@ -747,3 +825,7 @@ def get_class_env_pos(classification, slice_index):
         all_env_pos.append(env_pos)
     
     return all_env_pos
+
+
+
+#----------------------------------------------END-OF-THE-SCRIPT------------------------------------------------------------#
