@@ -14,7 +14,6 @@ from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import os
-import concurrent.futures
 from numba import jit
 import shutil
 
@@ -264,22 +263,28 @@ def smooth_field(input_field: np.ndarray, smoothing_scale: float, box_size, grid
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def plot_field(input_field: np.ndarray, name_sm_scale: str, dim: str, sm_scale: float, slice: int, filepath: str):
+def plot_field(input_field: np.ndarray, sm_scale: float, dim: str, slice: int, slice_thickness: int, name_sm_scale: str, filepath: str):
     """
     Plot the given field.
 
     Parameters:
     - input_field: numpy.ndarray
       The field to be plotted.
-    - title: str
-      The title of the plot.
+    - name_sm_scale: str
+      Smoothing scale for the plot (used for saving the plot).
+    - dim: str
+      The dimension of the field ('xy', 'yz', 'zx').
+    - sm_scale: float
+      The smoothing scale.
     - slice: int, optional (default= half grid size)
       The slice of the field to be plotted.
-    - axis: int, optional (default=2)
-      The axis along which the slice is taken.
+    - filepath: str
+      The file path where the plot will be saved.
+    - slice_thickness: int
+      The thickness of the slice.
     """
     eps=1e-15 # so that log doesn't get a value 0
-    N = None
+    N = slice_thickness
 
     # Plot for zero smoothening density field
     plt.figure(figsize = (2,2), dpi = 200)
@@ -289,10 +294,10 @@ def plot_field(input_field: np.ndarray, name_sm_scale: str, dim: str, sm_scale: 
       slic1=np.mean(delplot1[N:slice+N, :, :],axis=0)
 
     if dim == ('xz' or 'zx'):
-      slic1=np.mean(delplot1[:, N:slice+N, :],axis=1)
+      slic1=np.mean(delplot1[:, slice-N:slice+N, :],axis=1)
     
     if dim == ('xy' or 'yx'):
-      slic1=np.mean(delplot1[:, :, N:slice+N],axis=2)
+      slic1=np.mean(delplot1[:, :, slice-N:slice+N],axis=2)
 
     plt.imshow(slic1, cmap = 'inferno')
     plt.axis('off')
@@ -581,7 +586,7 @@ def classify_structures(tidal_eigenvalues: np.ndarray) -> np.ndarray:
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def calculate_volume_fraction(classification_matrix, label):
+def calculate_volume_fraction(classification_matrix: np.ndarray, label: int) -> float:
     """
     Calculate the volume fraction of a --specific label-- in a 3D classification matrix.
 
@@ -596,7 +601,7 @@ def calculate_volume_fraction(classification_matrix, label):
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def calculate_volume_fractions(classification_matrix):
+def calculate_volume_fractions(classification_matrix: np.ndarray, num_labels: np.ndarray) -> np.ndarray:
     """
     Calculate the volume fractions for --multiple labels-- in a 3D classification matrix.
 
@@ -619,13 +624,15 @@ def calculate_volume_fractions(classification_matrix):
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def slice_density_field(density_field, slice_index):
+def slice_density_field(density_field: np.ndarray, slice_index: int, dim: str, slice_thickness: int) -> np.ndarray:
     """
-    Extracts a 2D slice from a 3D density field and applies logarithmic transformation.
+    Extracts a 2D slice (XY plane) from a 3D density field and applies logarithmic transformation.
 
     Parameters:
     - density_field (numpy.ndarray): 3D array representing the density field.
     - slice_index (int): Index of the slice to be extracted along the z-axis.
+    - dim (str): The dimension of the slice ('xy', 'yz', 'zx').
+    - slice_thickness (int): The thickness of the slice.
 
     Returns:
     - numpy.ndarray: 2D array representing the logarithmic transformation of the specified slice.
@@ -640,16 +647,26 @@ def slice_density_field(density_field, slice_index):
     >>> result = slice_density_field(density_field, slice_index)
     """
     eps = 1e-15  # so that log doesn't get a value 0
-    N = 0
+    N = slice_thickness
 
     delplot1 = np.log10(density_field + 1 + eps)
-    d_field = delplot1[:, :, slice_index]
+
+    if dim == ('yz' or 'zy'):
+      slic1=np.mean(delplot1[N:slice+N, :, :],axis=0)
+
+    if dim == ('xz' or 'zx'):
+      slic1=np.mean(delplot1[:, slice-N:slice+N, :],axis=1)
+    
+    if dim == ('xy' or 'yx'):
+      slic1=np.mean(delplot1[:, :, slice-N:slice+N],axis=2)
+
+    d_field = np.mean(delplot1[:, :, N:slice_index+N], axis = 2)
     
     return d_field
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def get_pos(structure, projection, slice_index, classification, grid_size=512, box_size=100):
+def get_pos(structure: str, projection: str, slice_index: int, classification: np.ndarray, grid_size: int, box_size: int) -> np.ndarray:
     
     """
     Extracts positions of points in a 2D slice based on the specified structure, projection, and classification.
@@ -659,8 +676,8 @@ def get_pos(structure, projection, slice_index, classification, grid_size=512, b
     - projection (str): A string representing the projection type ('xy', 'yx', 'yz', 'zy', 'zx', 'xz').
     - slice_index (int): Index of the slice to be extracted.
     - classification (numpy.ndarray): 3D array representing the classification of points.
-    - grid_size (int): Size of the grid in the 3D array (default is 512).
-    - box_size (int): Size of the box in physical units (default is 100).
+    - grid_size (int): Size of the grid in the 3D array.
+    - box_size (int): Size of the box in physical units.
 
     Returns:
     - numpy.ndarray: 2D array representing the positions of points in the specified slice.
@@ -704,7 +721,7 @@ def get_pos(structure, projection, slice_index, classification, grid_size=512, b
             return position
         
         else: 
-            print('ValueError')
+            raise ValueError('Environment not found!')
             
             
     elif str(structure)[0].lower() == 's':
@@ -731,7 +748,7 @@ def get_pos(structure, projection, slice_index, classification, grid_size=512, b
             return position
         
         else: 
-            print('ValueError')
+            raise ValueError('Environment not found!')
             
             
     elif str(structure)[0].lower() == 'f':
@@ -758,7 +775,7 @@ def get_pos(structure, projection, slice_index, classification, grid_size=512, b
             return position
         
         else: 
-            print('ValueError')
+            raise ValueError('Environment not found!')
             
             
     elif str(structure)[0].lower() == 'n':
@@ -785,14 +802,14 @@ def get_pos(structure, projection, slice_index, classification, grid_size=512, b
             return position
         
         else: 
-            print('ValueError')
+            raise ValueError('Environment not found!')
         
     else:
-        print('ValueError')
+        raise ValueError('Environment not found!')
         
 #-------------------------------------------------------------------------------------------------------------#
 
-def get_class_env_pos(classification, slice_index):
+def get_class_env_pos(classification: np.ndarray, slice_index: int, dim: str, grid_size: int, box_size: int) -> list:
     
     """
     Extracts positions of points for all environment types ('v', 's', 'f', 'n') in a 2D slice.
@@ -808,7 +825,7 @@ def get_class_env_pos(classification, slice_index):
     - Uses the get_pos function to extract positions for each environment type.
     - The classification parameter is a 3D array where points are classified into different structures.
     - The slice_index parameter determines the index of the slice to be extracted.
-    - Positions are returned in physical units, scaled based on the default grid size (512) and box size (100).
+    - Positions are returned in physical units, scaled based on the default grid size and box size.
 
     Example:
     >>> classification = np.random.randint(0, 4, size=(512, 512, 512))
@@ -821,7 +838,7 @@ def get_class_env_pos(classification, slice_index):
     all_env_pos = []
     
     for env in envs:
-        env_pos = get_pos(env, 'xy', slice_index, classification)
+        env_pos = get_pos(env, dim, slice_index, classification, grid_size, box_size)
         all_env_pos.append(env_pos)
     
     return all_env_pos

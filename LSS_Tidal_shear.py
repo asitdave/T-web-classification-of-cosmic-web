@@ -32,14 +32,18 @@ else:
 
     save_path_density = os.path.join(save_path, 'density_field.npy')
 
-    extracted_values = extract_simdict_values(snap.properties)
+    extracted_values = extract_simdict_values(simdict=snap.properties)
     box_size = extracted_values['boxsize']
 
+    with open('input_params.txt', 'w') as f:
+        f.write('----------------------------------------\n')
+        f.write('box_size: ' + str(box_size) + '\n')
+
     print('Computing the density field...')
-    rho = compute_density_field(snap, grid_size, box_size, mas='CIC', verbose=True)
+    rho = compute_density_field(snapshot=snap, grid_size=grid_size, box_size=box_size, mas='CIC', verbose=True)
     print('Density field computed successfully.\n')
     
-    save_data(rho, save_path_density)
+    save_data(data = rho, file_path=save_path_density)
     print("Density field ('density_field.npy') saved successfully.")
 
 
@@ -47,17 +51,17 @@ else:
 if yn_smooth == 'y':
 
     def extract_scales(input_scales):
-        scales = input_scales.split()
 
+        scales = sorted(input_scales.split())
+
+        truncated_scales = []
         sm_scales = []
-
-        for i in scales:
-            sm_scales.append(float(i))
-            sm_scales.sort()
         
-        # Truncate the scales to 3 decimal places (used for naming the files later)
-        truncated_scales = [str(int(float(x) * 1000))[:3] for x in sm_scales]
-   
+        for scale in scales:
+            sm_scales.append(float(scale))
+            str_split = scale.split('.')
+            truncated_scales.append(''.join(str_num for str_num in str_split))
+
         return sm_scales, truncated_scales
     
     smth_scales = extract_scales(smoothing_scales)[0]
@@ -71,7 +75,7 @@ if yn_smooth == 'y':
     os.mkdir(f'{save_path}/smoothed_density_fields')
 
     for i, smth_scale in tqdm(enumerate(smth_scales)):
-        smooth_rho = smooth_field(rho, smth_scale, box_size = box_size, grid_size = grid_size)
+        smooth_rho = smooth_field(input_field=rho, smoothing_scale=smth_scale, box_size = box_size, grid_size = grid_size)
         save_path_smooth = os.path.join(save_path, 'smoothed_density_fields', f'smoothed_density_field_{truncated_scales[i]}.npy')
         save_data(smooth_rho, save_path_smooth)
 
@@ -89,7 +93,9 @@ os.makedirs(f'{current_dir}/density_plots', exist_ok=True)
 
 for i, sm_scale in enumerate(smth_scales):
     save_sm_path = os.path.join(current_dir, 'density_plots')
-    plot_field(rho, truncated_scales[i], 'xy', sm_scale, int(grid_size/2), save_sm_path)
+    plot_field(input_field=rho, sm_scale=sm_scale,
+                dim='xy', slice=int(grid_size/2), slice_thickness=5, 
+                name_sm_scale=truncated_scales[i], filepath=save_sm_path)
 
 print('Density field plots saved successfully.')
 
@@ -104,8 +110,11 @@ os.makedirs(os.path.join(f'{save_path}, tidal_fields'), exist_ok=True)
 
 for i, smooth_rho in tqdm(enumerate(smoothened_rho)):
     if yn_potential:
+        
         print('Calculating the tidal tensor and potential field...') if yn_potential else print('Calculating the tidal tensor...')
+
         tidal_tensor, Grav_potential = calculate_tidal_tensor(smooth_rho, calculate_potential=True)
+        
         print('Tidal tensor and potential calculated successfully.') if yn_potential else print('Tidal tensor calculated successfully.')
 
         save_path_tidal_tensor = os.path.join(save_path, 'tidal_fields', f'tidal_tensor_{truncated_scales[i]}.npy')
@@ -119,7 +128,9 @@ for i, smooth_rho in tqdm(enumerate(smoothened_rho)):
 
         if yn_traceless:    
             print('Calculating the traceless tidal shear...')
+            
             traceless_tidal_shear = calculate_traceless_tidal_shear(tidal_tensor, grid_size)
+            
             print('Traceless tidal shear calculated successfully.')
 
             save_path_traceless = os.path.join(save_path, 'tidal_fields', f'traceless_tidal_shear_{truncated_scales[i]}.npy')
@@ -132,7 +143,9 @@ for i, smooth_rho in tqdm(enumerate(smoothened_rho)):
 
     else:
         print('Calculating the tidal tensor...')
+        
         tidal_tensor = calculate_tidal_tensor(smooth_rho, calculate_potential=False)
+        
         print('Tidal tensor calculated successfully.')
 
         # Make directory to store tidal tensor files
@@ -148,7 +161,9 @@ for i, smooth_rho in tqdm(enumerate(smoothened_rho)):
         if yn_traceless:
 
             print('Calculating the traceless tidal shear...')
+            
             traceless_tidal_shear = calculate_traceless_tidal_shear(tidal_tensor, grid_size)
+            
             print('Traceless tidal shear calculated successfully.')
 
             save_path_traceless = os.path.join(save_path, 'tidal_fields', f'traceless_tidal_shear_{truncated_scales[i]}.npy')
