@@ -1,8 +1,8 @@
+#-------------------------------------------------------------------------------------------------------------#
 # This script contains functions that help in computing the tidal shear tensor for a given density field 
 # and classifies the structures based on the T-web classification scheme. 
 # It provides functions to calculate the eigenvalues and eigenvectors of the tidal shear tensor, 
 # as well as the traceless tidal shear tensor.
-
 #-------------------------------------------------------------------------------------------------------------#
 
 # Importing required libraries
@@ -20,7 +20,20 @@ import shutil
 #-------------------------------------------------------------------------------------------------------------#
 
 def read_input_file(file_path: str) -> list:
-   with open(file_path, "r") as file:
+   
+   # Initialize variables to store extracted values
+    snapshot_path = ""
+    save_path = ""
+    create_density = True
+    density_path = None
+    smooth_density = False
+    smoothing_scales = None
+    grid_size = 0
+    calculate_potential = False
+    calculate_traceless_tidal = False
+
+
+    with open(file_path, "r") as file:
       for line in file:
           # Remove comments and leading/trailing spaces
           line = line.strip().split("#")[0]  # Split by comment symbol if needed
@@ -97,11 +110,8 @@ def load_snapshot(snapshot_path: str) -> pynbody.snapshot:
     snap = pynbody.load(snapshot_path)
 
     header = snap.properties
-    print("Snapshot properties: ", header, '\n')
 
-    print("Loadable keys:", snap.loadable_keys(), '\n')
-
-    return snap
+    return snap, header
 
 #-------------------------------------------------------------------------------------------------------------#
 
@@ -129,6 +139,40 @@ def extract_simdict_values(simdict: pynbody.simdict.SimDict) -> dict:
         results[key] = float(str(value).split()[0])
 
     return results
+
+#-------------------------------------------------------------------------------------------------------------#
+
+def extract_scales(input_scales: list) -> tuple:
+    """
+    Extracts and processes scales from a list of input smoothing scales.
+
+    Parameters:
+    - input_scales: list
+      A list containing scales to be extracted and processed.
+
+    Returns:
+    - sm_scales: list
+      A list of smoothing scales converted to float.
+    - truncated_scales: list
+      A list of smoothing scales with decimal points removed.
+    """
+    # Sort the input scales in ascending order
+    scales = sorted(input_scales)
+
+    # Initialize lists to store processed scales
+    truncated_scales = []
+    sm_scales = []
+    
+    # Process each scale
+    for scale in scales:
+        # Convert scale to float and append to sm_scales
+        sm_scales.append(float(scale))
+
+        # Remove decimal points from scale and append to truncated_scales
+        str_split = str(scale).split('.')
+        truncated_scales.append(''.join(str_num for str_num in str_split))
+
+    return sm_scales, truncated_scales
 
 #-------------------------------------------------------------------------------------------------------------#
 
@@ -301,7 +345,7 @@ def plot_field(input_field: np.ndarray, sm_scale: float, dim: str, slice: int, s
 
     plt.imshow(slic1, cmap = 'inferno')
     plt.axis('off')
-    plt.title(r'$R_s = {sm_scale}~h^{-1} Mpc$'.format(sm_scale=str(sm_scale)))
+    plt.title(r'$R_s = $' + f'{sm_scale}' + r'$~h^{-1} Mpc$')
     
     save_path = os.path.join(filepath, f'{dim}_plane_{name_sm_scale}.png')
     plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
@@ -322,61 +366,42 @@ def calculate_tidal_tensor(density_field: np.ndarray, calculate_potential=False)
     - tidal_tensor: numpy.ndarray
       Tidal tensor (3x3 matrix) for each voxel in the simulation box.
     """
-
     # Fast Fourier Transform of the density field
     density_field_fft = np.fft.fftn(density_field)
     shape = density_field.shape[0]
 
     # Generate the k-space grid
-    kx_modes = np.fft.fftfreq(shape)
-    ky_modes = np.fft.fftfreq(shape)
-    kz_modes = np.fft.fftfreq(shape)
-    kx, ky, kz = np.meshgrid(kx_modes, ky_modes, kz_modes, indexing="ij")
+    k_modes = np.fft.fftfreq(shape)
+    kx, ky, kz = np.meshgrid(k_modes, k_modes, k_modes, indexing="ij")
 
-    # Calculate for all permutations
-    kx2 = np.multiply(kx, kx)
-    ky2 = np.multiply(ky, ky)
-    kz2 = np.multiply(kz, kz)
-    kxy = np.multiply(kx, ky)
-    kxz = np.multiply(kx, kz)
-    kyz = np.multiply(ky, kz)
-    k_sq = kx2 + ky2 + kz2 # Calculate the square of k
+    # Calculate the square of k
+    k_sq = kx**2 + ky**2 + kz**2
 
     # Calculate the tidal tensor in Fourier space
-    potential_k = -np.divide(density_field_fft, k_sq, where=k_sq != 0)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        potential_k = -np.divide(density_field_fft, k_sq, where=k_sq != 0)
 
-    # Calculate the potential
+    # Calculate the potential if required
     if calculate_potential:
-      potential = np.fft.ifft(potential_k)
+        potential = np.fft.ifftn(potential_k).real
 
-    # Calculate the tidal tensor
-    tidal_tensor = np.zeros((3, 3) + density_field.shape, dtype=np.complex128)
-    tk00 = -potential_k * kx2
-    tk01 = -potential_k * kxy
-    tk02 = -potential_k * kxz
-    tk11 = -potential_k * ky2
-    tk12 = -potential_k * kyz
-    tk22 = -potential_k * kz2
+    # Calculate the components of the tidal tensor in Fourier space
+    tk_components = -potential_k * np.array([kx**2, kx*ky, kx*kz, ky**2, ky*kz, kz**2])
 
-    # Inverse Fourier Transform to get the tidal tensor
-    tt00 = np.fft.ifftn(tk00)
-    tt01 = np.fft.ifftn(tk01)
-    tt02 = np.fft.ifftn(tk02)
-    tt12 = np.fft.ifftn(tk12)
-    tt11 = np.fft.ifftn(tk11)
-    tt22 = np.fft.ifftn(tk22)
+    # Inverse Fourier Transform to get the tidal tensor components
+    tidal_tensor_components = np.fft.ifftn(tk_components)
 
-    # Assembling the tensor field (assigning the values to symmetric counterparts)
-    tidal_tensor[0, 0, ...] = tt00
-    tidal_tensor[1, 0, ...] = tt01
-    tidal_tensor[0, 1, ...] = tt01
-    tidal_tensor[1, 1, ...] = tt11
-    tidal_tensor[0, 2, ...] = tt02
-    tidal_tensor[2, 0, ...] = tt02
-    tidal_tensor[2, 2, ...] = tt22
-    tidal_tensor[1, 2, ...] = tt12
-    tidal_tensor[2, 1, ...] = tt12
-    tidal_tensor = tidal_tensor.real
+    # Assemble the tensor field (assigning the values to symmetric counterparts)
+    tidal_tensor = np.zeros((3, 3) + density_field.shape, dtype=np.float64)
+    tidal_tensor[0, 0, ...] = tidal_tensor_components[0].real
+    tidal_tensor[1, 0, ...] = tidal_tensor_components[1].real
+    tidal_tensor[0, 1, ...] = tidal_tensor_components[1].real
+    tidal_tensor[1, 1, ...] = tidal_tensor_components[3].real
+    tidal_tensor[0, 2, ...] = tidal_tensor_components[2].real
+    tidal_tensor[2, 0, ...] = tidal_tensor_components[2].real
+    tidal_tensor[2, 2, ...] = tidal_tensor_components[5].real
+    tidal_tensor[1, 2, ...] = tidal_tensor_components[4].real
+    tidal_tensor[2, 1, ...] = tidal_tensor_components[4].real
 
     if calculate_potential:
       return tidal_tensor, potential
@@ -418,10 +443,8 @@ def calculate_traceless_tidal_shear(tidal_tensor: np.ndarray, grid_size: int) ->
       The traceless tidal shear.
     """
     tid = tidal_tensor.reshape(grid_size, grid_size, grid_size, 3, 3)
-    traceless = []
-    for i in tqdm(range(len(tid))):
-        traceless.append(make_traceless(tid[i]))
-    return np.array(traceless).reshape(grid_size, grid_size, grid_size, 3, 3)
+    traceless = make_traceless(tid)
+    return traceless.reshape(grid_size, grid_size, grid_size, 3, 3)
 
 #-------------------------------------------------------------------------------------------------------------#
 
@@ -471,118 +494,60 @@ def load_all_npy_files(folder_path: str) -> list:
 
 #-------------------------------------------------------------------------------------------------------------#
 
-# Define the JIT-compiled function
-@jit(nopython=True)
-def calculate_eigenvalues_and_vectors_jit(tidal_shear_tensor, grid_size):
-    eigenvalues = np.zeros((grid_size, grid_size, grid_size, 3))
-    eigenvectors = np.zeros((grid_size, grid_size, grid_size, 3, 3))
+def calculate_eigenvalues_and_vectors(tidal_shear_tensor: np.ndarray, grid_size: int) -> tuple:
+    """
+    Calculate eigenvalues and eigenvectors of the tidal shear tensor for each grid point.
 
-    for i in range(grid_size):
-        for j in range(grid_size):
-            for k in range(grid_size):
-                eigenvalues[i, j, k], eigenvectors[i, j, k] = np.linalg.eig(tidal_shear_tensor[i, j, k])
-                
-                # Sort the eigenvalues and corresponding eigenvectors in descending order
-                sorted_indices = np.argsort(eigenvalues[i, j, k])[::-1]
-                eigenvalues[i, j, k] = eigenvalues[i, j, k][sorted_indices]
-                eigenvectors[i, j, k] = eigenvectors[i, j, k][sorted_indices]
+    Parameters:
+    - tidal_shear_tensor (ndarray): 3D array representing the tidal shear tensor with shape (grid_size, grid_size, grid_size, 3, 3).
+    - grid_size (int): Size of the grid in each dimension.
 
-    return eigenvalues, eigenvectors
+    Returns:
+    - eigenvalues (ndarray): Array containing the eigenvalues for each grid point with shape (grid_size, grid_size, grid_size, 3).
+    - eigenvectors (ndarray): Array containing the corresponding eigenvectors for each grid point with shape (grid_size, grid_size, grid_size, 3, 3).
+    """
 
-#-------------------------------------------------------------------------------------------------------------#
-from multiprocessing import Pool
+    # Reshape the tidal shear tensor to have a shape of (grid_size*grid_size*grid_size, 3, 3)
+    reshaped_tensor = tidal_shear_tensor.reshape((-1, 3, 3))
 
-def calculate_eigenvalues_and_vectors_worker(args):
-    i, j, k, tidal_shear_tensor = args
-    eigenvalues, eigenvectors = np.linalg.eig(tidal_shear_tensor)
-    sorted_indices = np.argsort(eigenvalues)[::-1]
-    return (eigenvalues[sorted_indices], eigenvectors[sorted_indices])
+    # Calculate eigenvalues and eigenvectors for all tensors simultaneously
+    eigenvalues, eigenvectors = np.linalg.eig(reshaped_tensor)
 
-def calculate_eigenvalues_and_vectors(tidal_shear_tensor, grid_size):
-    eigenvalues = np.zeros((grid_size, grid_size, grid_size, 3))
-    eigenvectors = np.zeros((grid_size, grid_size, grid_size, 3, 3))
+    # Sort eigenvalues and corresponding eigenvectors in descending order
+    sorted_indices = np.argsort(eigenvalues, axis=-1)[:, ::-1]
 
-    pool = Pool()  # Create a multiprocessing Pool
-    results = []
+    # Apply sorting to eigenvalues and eigenvectors arrays
+    eigenvalues = np.take_along_axis(eigenvalues, sorted_indices, axis=-1)
+    eigenvectors = np.take_along_axis(eigenvectors, sorted_indices[..., np.newaxis], axis=-1)
 
-    for i in range(grid_size):
-        for j in range(grid_size):
-            for k in range(grid_size):
-                args = (i, j, k, tidal_shear_tensor[i, j, k])
-                results.append(pool.apply_async(calculate_eigenvalues_and_vectors_worker, (args,)))
-
-    pool.close()
-    pool.join()
-
-    for i, result in enumerate(results):
-        i_idx, j_idx, k_idx = np.unravel_index(i, (grid_size, grid_size, grid_size))
-        eigenvalues[i_idx, j_idx, k_idx], eigenvectors[i_idx, j_idx, k_idx] = result.get()
+    # Reshape eigenvalues and eigenvectors arrays back to the original shape
+    eigenvalues = eigenvalues.reshape((grid_size, grid_size, grid_size, 3))
+    eigenvectors = eigenvectors.reshape((grid_size, grid_size, grid_size, 3, 3))
 
     return eigenvalues, eigenvectors
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def classify_structure(eigenvalues: np.ndarray) -> int:
+def classify_structure(eigenvalues: np.ndarray) -> np.ndarray:
     ''' 
     Uses T-web classification scheme.
+
     Classifies each voxel as a part of Void, Sheet, Filament, or Node
     based on the eigenvalues of the tidal tensor.
-    '''
 
-    num_positive = np.sum(eigenvalues > 0)
-    num_negative = np.sum(eigenvalues < 0)
+    This counts the number of positive eigenvalues for each voxel.
 
-    if num_positive == 0:
-        return 0 # "Void"
-    elif num_positive == 1 and num_negative == 2:
-        return 1 # "Sheet"
-    elif num_positive == 2 and num_negative == 1:
-        return 2 # "Filament"
-    elif num_positive == 3:
-        return 3 # "Cluster"
+    - If all three eigenvalues are positive, the voxel is classified as a Node.
+    - If two eigenvalues are positive, the voxel is classified as a Filament.
+    - If one eigenvalue is positive, the voxel is classified as a Sheet.
+    - If no eigenvalues are positive, the voxel is classified as a Void.
     
+    '''
+    
+    # Count the number of positive eigenvalues
+    classified_array = np.sum(eigenvalues > 0, axis = -1) # Shape of eigenvalues is (grid_size, grid_size, grid_size, 3)
 
-
-def classify_structure_worker(args):
-    eigenvalues_slice = args
-    classification_matrix_slice = np.zeros_like(eigenvalues_slice)
-
-    for i in range(eigenvalues_slice.shape[0]):
-        for j in range(eigenvalues_slice.shape[1]):
-            for k in range(eigenvalues_slice.shape[2]):
-                classification_matrix_slice[i, j, k] = classify_structure(eigenvalues_slice[i, j, k])
-
-    return classification_matrix_slice
-
-
-# Define a function to classify structures using multiprocessing
-def classify_structures(tidal_eigenvalues: np.ndarray) -> np.ndarray:
-    total_files = tidal_eigenvalues.shape[0]
-    grid_size = tidal_eigenvalues.shape[1]
-    pool = Pool()  # Create a multiprocessing Pool
-    results = []
-
-    for num_file in range(total_files):
-        results.append(pool.apply_async(classify_structure_worker, (tidal_eigenvalues[num_file],)))
-
-    pool.close()
-    pool.join()
-
-    classification_matrices = []
-
-    for result in results:
-        classification_matrices.append(result.get())
-
-    return np.array(classification_matrices)
-
-# # Assuming tidal_eigenvalues is your eigenvalues data
-# classified_structures = classify_structures(tidal_eigenvalues)
-
-# # Saving the classification matrices
-# for num_file, classification_matrix in enumerate(classified_structures):
-#     save_path_classification = os.path.join(new_directory_path, f'classification_matrix_{num_file}.npy')
-#     np.save(save_path_classification, classification_matrix)
-
+    return classified_array # Shape of classified_array is (grid_size, grid_size, grid_size)
 
 #-------------------------------------------------------------------------------------------------------------#
 
