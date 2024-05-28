@@ -6,7 +6,7 @@
  
 #### INSTRUCTIONS ####
 # 1. Make sure the input_params.txt file is present in the current working directory.
-# 2. Make sure the LSS_Tidal_shear.py script is run before running this script.
+# 2. Make sure the Tidal_Field_Calculator.py script is run before running this script.
 
 # Import necessary libraries
 from tqdm import tqdm

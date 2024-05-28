@@ -6,7 +6,7 @@
 
 #### INSTRUCTIONS ####
 # 1. Make sure the input_params.txt file is present in the current working directory.
-# 2. Make sure the LSS_BB.py script is present in the current working directory.
+# 2. Make sure the LSS_TWeb_BlackBox.py script is present in the current working directory.
 # 3. The script expects you to have a simulation snapshot for the analysis.
 # 4. Parameters that can be modified in this script are:
 #       - Projection of the box for the plots (default: xy)

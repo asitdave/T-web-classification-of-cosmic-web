@@ -1,13 +1,13 @@
 #----------------------------------------------------------------------------------------------------------------------#
-# Description: This script analyses the classification of structures based on the T-web classification. The volume fractions
-#              of different structures are plotted against the smoothing scales. The classification overlay on the density
-#              field is plotted for the given smoothing scales. The changes in the classification of particles are also
-#              plotted if the smoothing scales are changed.
+# Description: This script analyses the classification of structures based on the T-web classification. The volume     #
+#              fractions of different structures are plotted against the smoothing scales. The classification overlay  #
+#              on the density field is plotted for the given smoothing scales. The changes in the classification of    #
+#              particles are also plotted if the smoothing scales are changed.                                         #
 #----------------------------------------------------------------------------------------------------------------------#
  
 #### INSTRUCTIONS ####
 # 1. Make sure the input_params.txt file is present in the current working directory.
-# 2. Make sure the LSS_Tidal_shear.py & LSS_Classification.py script is ran before running this script.
+# 2. Make sure the Tidal_Field_Calculator.py & Tweb_Structure_Classifier.py script is ran before running this script.
 # 3. Parameters that can be modified in this script are:
 #       - Slice index for the structure classification (default: middle slice)
 #       - Projection of the box for the plots (default: xy)
