@@ -1,19 +1,37 @@
-#-------------------------------------------------------------------------------------------------------------#
-# This script contains functions that help in the following:
-# 1. Computing the density field from a cosmological simulation snapshot.
-# 2. Smoothing the density field using Gaussian filtering.
-# 3. Plotting the density field and saving the plots.
-# 4. Calculating the tidal tensor & potential field from the density field.
-# 5. Making the tidal tensor traceless.
-# 6. Calculating the traceless tidal shear tensor.
-# 7. Calculating of the eigenvalues and eigenvectors of the tidal shear tensor.
-# 8. Classifying of the Large-scale structures based on the T-web classification scheme. 
-# 9. Visualizing the classification results but overlaying the classification on the density field.
+
+"""
+LSS_TWeb_BlackBox.py
+-------------------------------
+
+Author: Asit Dave
+Date: 31-05-2024
+License: MIT
+
+Description:
+
+    This Python script, LSS_TWeb_BlackBox.py, serves as a comprehensive library designed to facilitate 
+    various analyses of cosmological simulation data. It provides a suite of functions to compute, 
+    process, and visualize large-scale structures within the universe, based on density fields and 
+    tidal tensor calculations. 
+
+    Key functionalities include:
+
+      1. Density Field Computation: Extract the density field from cosmological simulation snapshots.
+      2. Gaussian Smoothing: Apply Gaussian filtering to smooth the computed density field.
+      3. Visualization: Plot and save visual representations of the density field.
+      4. Tidal Tensor Calculation: Derive the tidal tensor and potential field from the density field.
+      5. Tidal Tensor Traceless Transformation: Modify the tidal tensor to make it traceless.
+      6. Eigenvalue and Eigenvector Analysis: Calculate the eigenvalues and eigenvectors of the tidal shear tensor.
+      7. Large-scale Structure Classification: Classify large-scale structures based on the T-web classification scheme.
+      8. Result Visualization: Overlay and visualize the classification results on the density field.
 
 # Note: All files are saved in the .npy format.
-#-------------------------------------------------------------------------------------------------------------#
 
-# Importing required libraries
+"""
+
+
+#----------------------------------------- IMPORT LIBRARIES ----------------------------------------------#
+
 import numpy as np
 import pynbody
 import MAS_library as MASL
@@ -24,9 +42,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import smoothing_library as SL
 import os
 import shutil
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 #-------------------------------------------------------------------------------------------------------------#
-
 
 def read_input_file(file_path: str) -> list:
     """
@@ -222,32 +243,42 @@ def load_data(file_path: str) -> np.ndarray:
     try:
       loaded_data = np.load(file_path)
 
-    except ImportError:
-      print("Error loading the data from the file path. Make sure that the file type is .npy.")
+    except ImportError as e:
+      logging.error("Error loading the data from the file path. Make sure that the file type is .npy.\n"
+                    f"Error message: {e}")
 
     return loaded_data
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def create_directory(directory_path: str) -> None:
+def create_directory(directory_path: str, overwrite: bool) -> None:
     """
     Creates a directory, overwriting any existing directory with the same name.
 
     Args:
         directory_path: str
             Path to the directory to create.
+        overwrite: bool
+            Whether to overwrite the directory if it already exists.
 
     Returns:
         None
     """
     
-    if os.path.exists(directory_path) and os.path.isdir(directory_path):
     
-      print(f"Warning: Overwriting existing directory: {directory_path}\n")
+    if os.path.exists(directory_path) and os.path.isdir(directory_path):
+
+      if overwrite:
+        logging.warning(f"Warning: Overwriting existing directory: {directory_path}\n")
+        
+        # Overwrite existing directory if it's a directory
+        shutil.rmtree(directory_path)  # Remove the existing directory
+        os.makedirs(directory_path)  # Create the directory again
       
-      # Overwrite existing directory if it's a directory
-      shutil.rmtree(directory_path)  # Remove the existing directory
-      os.makedirs(directory_path)  # Create the directory again
+      else:
+        logging.warning(f"Warning: Directory already exists: {directory_path}\n"
+              "The files will continue to be saved in the existing directory.\n"
+              )
     
     else:
       os.makedirs(directory_path)  # Attempt to create directories recursively
@@ -499,24 +530,7 @@ def calculate_traceless_tidal_shear(tidal_tensor: np.ndarray, grid_size: int) ->
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def save_data(data: np.ndarray, file_path: str) -> None:
-    """
-    Save the given data to the specified file path.
-
-    Parameters:
-    - data: numpy.ndarray
-      The data to be saved.
-    - file_path: str
-      The file path where the data will be saved.
-    """
-
-    np.save(file_path, data)
-
-    return None
-
-#-------------------------------------------------------------------------------------------------------------#
-
-def load_all_npy_files(folder_path: str, filename_prefix: str) -> list:
+def load_all_npy_files(folder_path: str, filename_prefix: str, str_smoothing_scales: list[str]) -> list:
     """
     Loads all files with the .npy extension from a folder using concurrent processing.
 
@@ -530,11 +544,10 @@ def load_all_npy_files(folder_path: str, filename_prefix: str) -> list:
     """
 
     # Create a list of all the tidal tensor files (tidal_tensor_*.npy)
-    all_tidal_files = [os.path.join(folder_path, name) for name in os.listdir(folder_path) if name.startswith(filename_prefix)]
-    tidal_files = sorted(all_tidal_files)
+    tidal_files = [os.path.join(folder_path, f'{filename_prefix}{name}.npy') for name in str_smoothing_scales]
 
     if not tidal_files:
-        print('No .npy files found in the folder.')
+        raise logging.error('No .npy files found in the folder.')
         return []
 
     data_list = []
@@ -547,7 +560,8 @@ def load_all_npy_files(folder_path: str, filename_prefix: str) -> list:
                 data = future.result()
                 data_list.append(data)
             except Exception as e:
-                print(f"Error loading {future_to_filepath[future]}: {e}")
+                logging.error(f"Error loading {future_to_filepath[future]}: {e}")
+                exit()
 
     return data_list
 
@@ -739,7 +753,7 @@ def slice_density_field(density_field: np.ndarray, slice_thickness: list[int, in
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def get_structure_positions(structure: str, projection: str, slice_index: int, classification: np.ndarray, 
+def get_structure_positions(structure: str, projection: str, slice_index: int, classification_matrix: np.ndarray, 
                             grid_size: int, box_size: int) -> np.ndarray:
     
     """
@@ -777,21 +791,21 @@ def get_structure_positions(structure: str, projection: str, slice_index: int, c
     if str(structure)[0].lower() == 'v':
 
         if (str(projection) == 'xy' or 'yx'):
-            mask_r, mask_c = np.where(classification[:, :, slice_index] == 0)
+            mask_r, mask_c = np.where(classification_matrix[:, :, slice_index] == 0)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
-            position = np.column_stack((mask_c, mask_r))
+            position = np.column_stack((mask_r, mask_c))
             return position
         
         elif (str(projection) == 'yz' or 'zy'):
-            mask_r, mask_c = np.where(classification[slice_index, :, :] == 0)
+            mask_r, mask_c = np.where(classification_matrix[slice_index, :, :] == 0)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
             position = np.column_stack((mask_r, mask_c))
             return position
         
         elif (str(projection) == 'zx' or 'xz'):
-            mask_r, mask_c = np.where(classification[:, slice_index, :] == 0)
+            mask_r, mask_c = np.where(classification_matrix[:, slice_index, :] == 0)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
             position = np.column_stack((mask_r, mask_c))
@@ -804,21 +818,21 @@ def get_structure_positions(structure: str, projection: str, slice_index: int, c
     elif str(structure)[0].lower() == 's':
         
         if (str(projection) == 'xy' or 'yx'):
-            mask_r, mask_c = np.where(classification[:, :, slice_index] == 1)
+            mask_r, mask_c = np.where(classification_matrix[:, :, slice_index] == 1)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
-            position = np.column_stack((mask_c, mask_r))
+            position = np.column_stack((mask_r, mask_c))
             return position
         
         elif (str(projection) == 'yz' or 'zy'):
-            mask_r, mask_c = np.where(classification[slice_index, :, :] == 1)
+            mask_r, mask_c = np.where(classification_matrix[slice_index, :, :] == 1)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
             position = np.column_stack((mask_r, mask_c))
             return position
         
         elif (str(projection) == 'zx' or 'xz'):
-            mask_r, mask_c = np.where(classification[:, slice_index, :] == 1)
+            mask_r, mask_c = np.where(classification_matrix[:, slice_index, :] == 1)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
             position = np.column_stack((mask_r, mask_c))
@@ -831,21 +845,21 @@ def get_structure_positions(structure: str, projection: str, slice_index: int, c
     elif str(structure)[0].lower() == 'f':
         
         if (str(projection) == 'xy' or 'yx'):
-            mask_r, mask_c = np.where(classification[:, :, slice_index] == 2)
+            mask_r, mask_c = np.where(classification_matrix[:, :, slice_index] == 2)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
-            position = np.column_stack((mask_c, mask_r))
+            position = np.column_stack((mask_r, mask_c))
             return position
         
         elif (str(projection) == 'yz' or 'zy'):
-            mask_r, mask_c = np.where(classification[slice_index, :, :] == 2)
+            mask_r, mask_c = np.where(classification_matrix[slice_index, :, :] == 2)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
             position = np.column_stack((mask_r, mask_c))
             return position
         
         elif (str(projection) == 'zx' or 'xz'):
-            mask_r, mask_c = np.where(classification[:, slice_index, :] == 2)
+            mask_r, mask_c = np.where(classification_matrix[:, slice_index, :] == 2)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
             position = np.column_stack((mask_r, mask_c))
@@ -858,21 +872,21 @@ def get_structure_positions(structure: str, projection: str, slice_index: int, c
     elif str(structure)[0].lower() == 'n':
         
         if (str(projection) == 'xy' or 'yx'):
-            mask_r, mask_c = np.where(classification[:, :, slice_index] == 3)
+            mask_r, mask_c = np.where(classification_matrix[:, :, slice_index] == 3)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
-            position = np.column_stack((mask_c, mask_r))
+            position = np.column_stack((mask_r, mask_c))
             return position
         
         elif (str(projection) == 'yz' or 'zy'):
-            mask_r, mask_c = np.where(classification[slice_index, :, :] == 3)
+            mask_r, mask_c = np.where(classification_matrix[slice_index, :, :] == 3)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
             position = np.column_stack((mask_r, mask_c))
             return position
         
         elif (str(projection) == 'zx' or 'xz'):
-            mask_r, mask_c = np.where(classification[:, slice_index, :] == 3)
+            mask_r, mask_c = np.where(classification_matrix[:, slice_index, :] == 3)
             mask_r = mask_r * box_size / grid_size
             mask_c = mask_c * box_size / grid_size
             position = np.column_stack((mask_r, mask_c))
@@ -886,7 +900,7 @@ def get_structure_positions(structure: str, projection: str, slice_index: int, c
         
 #-------------------------------------------------------------------------------------------------------------#
 
-def get_all_env_pos(classification: np.ndarray, slice_index: int, projection: str, grid_size: int, box_size: int) -> list:
+def get_all_env_pos(classification_matrix: np.ndarray, slice_index: int, projection: str, grid_size: int, box_size: int) -> list:
     
     """
     Extracts positions of points for all environment types ('v', 's', 'f', 'n') in a 2D slice.
@@ -916,16 +930,16 @@ def get_all_env_pos(classification: np.ndarray, slice_index: int, projection: st
     >>> result = get_class_env_pos(classification, slice_index, projection, grid_size, box_size)
     """
     
-    envs = ['v', 's', 'f', 'n']
+    envs = ['v', 's', 'f', 'n'] # Voids, Sheets, Filaments, Nodes
     
-    all_env_pos = [get_structure_positions(env, projection, slice_index, classification, grid_size, box_size)\
+    all_env_pos = [get_structure_positions(env, projection, slice_index, classification_matrix, grid_size, box_size)\
                    for env in envs]
     
     return all_env_pos
 
 #-------------------------------------------------------------------------------------------------------------#
 
-def plot_classification_overlay(smth_scale: float, classification: np.ndarray, rho: np.ndarray, 
+def plot_classification_overlay(smth_scale: float, classification_matrix: np.ndarray, smoothed_rho: np.ndarray, 
                                 slice_thickness: list[int, int], slice_index: int, projection: str, 
                                 grid_size: int, box_size: int, save_path: str):
 
@@ -957,10 +971,10 @@ def plot_classification_overlay(smth_scale: float, classification: np.ndarray, r
     sizes = [0.3, 0.3, 0.3, 0.8] # Size of points for each classification
     
     # Get positions (in physical units) in a 2D slice for each environment type
-    env_pos = get_all_env_pos(classification, slice_index, projection, grid_size, box_size)
+    env_pos = get_all_env_pos(classification_matrix, slice_index, projection, grid_size, box_size)
     
     # Get the density field slice
-    slice_ = slice_density_field(rho, slice_thickness, projection)
+    slice_ = slice_density_field(smoothed_rho, slice_thickness, projection)
     
     # Plot the overlay of structure classifications on the density field slice
     fig, ax = plt.subplots(2, 2, figsize = (10, 8), dpi = 300)
@@ -980,6 +994,52 @@ def plot_classification_overlay(smth_scale: float, classification: np.ndarray, r
     plt.suptitle(f'$R_s = {smth_scale}~h^{-1}~Mpc$')
     fig.tight_layout()
     fig.savefig(save_path)
+
+#-------------------------------------------------------------------------------------------------------------#
+
+def overlay_all_envs(classification_matrix: np.ndarray, smoothed_rho: np.ndarray, slice_thickness: list[int, int], \
+                     smoothing_scale: list[float], slice_index: int, projection: str, grid_size: int, box_size: int, save_path: str) -> None:
+    """
+    Overlay all environmental classifications on a density slice and save the resulting image.
+
+    Parameters:
+    - classification_matrix (np.ndarray): 3D array of environmental classifications.
+    - smoothed_rho (np.ndarray): 3D array of smoothed density values.
+    - slice_thickness (list[int, int]): List containing the start and end indices defining the slice thickness.
+    - smoothing_scale (list[float]): List containing the smoothing scale values.
+    - slice_index (int): Index of the slice to be taken along the specified projection axis.
+    - projection (str): Axis along which the slice is taken ('x', 'y', or 'z').
+    - grid_size (int): Size of the grid.
+    - box_size (int): Size of the box in Mpc/h.
+    - save_path (str): Path to save the resulting image.
+
+    Returns:
+    - None: This function saves the resulting image to the specified path.
+    """
+    
+    labels = ['Void', 'Sheet', 'Filament', 'Cluster']
+
+    env_pos = get_all_env_pos(classification_matrix, slice_index, projection, grid_size, box_size)
+
+    density_slice = slice_density_field(smoothed_rho, slice_thickness, projection)
+
+    alphas = [0.5, 0.5, 0.5, 0.5]
+    sizes = [0.015, 0.015, 0.015, 0.015]
+
+    plt.figure(figsize=(5, 7), dpi=300)
+
+    for i in range(len(labels)):
+        plt.imshow(density_slice, cmap='Greys', extent=[0, box_size, 0, box_size], origin='lower')
+        plt.scatter(env_pos[i][:, 0], env_pos[i][:, 1], s=sizes[i], alpha=alphas[i], label=labels[i])
+        plt.tick_params(axis='both', which='both', left=True, right=True, top=True, bottom=True, direction='in', labelsize=15)
+        plt.xlabel(r'$h^{-1}~Mpc$', fontsize = 12)
+        plt.ylabel(r'$h^{-1}~Mpc$', fontsize = 12)
+    
+    plt.title(r'$R_s = {:.2f}~h^{{-1}}~Mpc$'.format(smoothing_scale), fontsize = 18)
+
+    plt.legend(bbox_to_anchor = (1.05, 0.5), fontsize = 15, markerscale = 70.0, ncol = 1)
+
+    plt.savefig(save_path)
 
 #-------------------------------------------------------------------------------------------------------------#
 
@@ -1168,6 +1228,7 @@ def plot_env_changes(transformations: dict[str, np.ndarray], density_slice: np.n
 
     plt.suptitle('Changes in classification of Halo environments', fontsize=18)
     plt.savefig(save_path)
+
 
 
 #----------------------------------------------END-OF-THE-SCRIPT------------------------------------------------------------#
