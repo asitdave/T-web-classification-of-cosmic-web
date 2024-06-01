@@ -9,18 +9,13 @@ This projects helps you perform calculations to derive the tidal fields from a s
 
 
 
-
-
-
-
-
-
 ## Features
 
 - **Automated calculations and plotting** All the calculations are done automatically, from calculating the density field to classifying the structures of the Cosmic web. Moreover, although the plots are generated automatically, data is saved for the user for further analysis.
 - **Volume Fraction Analysis**: Plot volume fraction of different large-scale structures against smoothing scales.
 - **Classification plots**: Visualize how the cosmic structures are classified using T-web classification scheme.
 - **Structural changes**: Shows how the number density of large-scale structures change when we alter the smoothing scales.
+
 
 
 ## Getting started
@@ -30,6 +25,7 @@ Before running the scripts, ensure you have the following:
 - Python 3.x
 - Libraries: NumPy, pynbody, Pylians3, tqdm, SciPy, matplotlib
 
+
 ### Instructions
 Make sure to follow these instructions before running the scripts:
     
@@ -37,7 +33,9 @@ Make sure to follow these instructions before running the scripts:
 
 2. **Modify `input_params.txt` file**: Edit the `input_params.txt` file to specify the requirement for your analysis. Here's a sample of what the file should look like:
 
-##### ADD IMAGE ####
+<div style="text-align: center;">
+    <img src="plots/input_params_example.png" alt="input_params_example" width="750"/>
+</div>
 
 3. **Run Required Scripts**: A brief description of what each python script does is given below:
 - `Tidal_Field_Calculator.py`: This script is designed to compute the density field, tidal tensor, potential field, and traceless tidal shear tensor for a given cosmological N-body simulation snapshot. Users have the option to smooth the density field using a Gaussian filter.
@@ -51,27 +49,42 @@ Note: Ideally, you should run `Tidal_Field_Calculator.py` > `T_web_Structure_Cla
 
 4. **Run the script** Execute the scripts using the following command:
 ``` python3 script_name.py ```
+
+
+
+
 ## Output
 The script generates various data files (.npy) and plots different features, as shown below:
+- Density field smoothing for different smoothing scales
 - LSS Volume Fractions vs Smoothing scale 
 - Overlay of classified large-scale structures on density fields
 - Changes number density of the environments when varying the smoothing scales.
 
 #### Sample Output
 
-![density_plot_054](plots/xy_plane_054.png)
-![density_plot_054](plots/xy_plane_013.png)
+<div style="text-align: center; padding-bottom: 20px">
+    <img src="plots/xy_plane_054.png" alt="density_plot_054" width="200"/>
+    <img src="plots/xy_plane_076.png" alt="density_plot_076" width="200"/>
+    <img src="plots/xy_plane_13.png" alt="density_plot_13" width="200"/>
+</div>
 
-<!-- ![Volume_frac_vs_Rs_plot](plots/volume_frac.png) -->
+<div style="text-align: center; padding-bottom: 20px">
+    <img src="plots/v_frac_updated.png" alt="volume_frac_plot" width="500"/>
+</div>
 
-![Classification_overlay_054](plots/classification_overlay_054_xy.png)
+<div style="text-align: center; padding-bottom: 20px">
+    <img src="plots/classification_overlay_054_xy.png" alt="Classification_overlay_054" width="500"/>
+</div>
 
-![Classification_change](plots/classification_change_054_13_1.png)
+<div style="text-align: center; padding-bottom: 20px">
+    <img src="plots/env_classification_all.png" alt="Classification_overlay_all" width="500"/>
+</div>
+
+<div style="text-align: center; padding-bottom: 20px">
+    <img src="plots/classification_change_054_13_1.png" alt="Classification_change" width="500"/>
+</div>
 
 
-## Screenshots
-
-![App Screenshot](https://via.placeholder.com/468x300?text=App+Screenshot+Here)
 
 
 ## Author
@@ -79,14 +92,20 @@ The script generates various data files (.npy) and plots different features, as 
 - Asit Dave: [@asitdave](https://www.github.com/asitdave)
 
 
+
+
 ## Acknowledgements
 
- - Thanks to [Prof. Dr. Cristiano Porciani](https://astro.uni-bonn.de/en/m/porciani) for his valuable guidance in developing this project.
+ - Thanks to [Prof. Dr. Cristiano Porciani](https://astro.uni-bonn.de/en/m/porciani),  for his valuable guidance in developing this project.
+
  - My family and friends have been a constant source of motivation ❤️
+
+
 
 ## License
 
 [MIT](https://choosealicense.com/licenses/mit/)
+
 
 
 ## Contact/Support
