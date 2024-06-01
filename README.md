@@ -73,7 +73,7 @@ The script generates various data files (.npy) and plots different features, as 
 </div>
 
 <div style="text-align: center; padding-bottom: 20px">
-    <img src="plots/classification_overlay_054_xy.png" alt="Classification_overlay_054" width="500"/>
+    <img src="plots/Classification_overlay_054_xy.png" alt="Classification_overlay_054" width="500"/>
 </div>
 
 <div style="text-align: center; padding-bottom: 20px">
@@ -81,7 +81,7 @@ The script generates various data files (.npy) and plots different features, as 
 </div>
 
 <div style="text-align: center; padding-bottom: 20px">
-    <img src="plots/classification_change_054_13_1.png" alt="Classification_change" width="500"/>
+    <img src="plots/Classification_change_054_13_1.png" alt="Classification_change" width="500"/>
 </div>
 
 
