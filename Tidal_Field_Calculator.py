@@ -29,12 +29,14 @@ Execution:
 
 #----------------------------------------- IMPORT LIBRARIES ----------------------------------------------#
 
-import os
-import logging
-import time
 import pynbody
 import numpy as np
 from tqdm import tqdm
+
+import os
+import logging
+import time
+
 from LSS_TWeb_BlackBox import *
 
 # Configure logging

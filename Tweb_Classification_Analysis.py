@@ -29,10 +29,13 @@ Instructions:
 #----------------------------------------- IMPORT LIBRARIES ----------------------------------------------#
 
 import numpy as np
+
+import time
 import os
 import logging
+
 from LSS_TWeb_BlackBox import *
-import time
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -368,6 +371,9 @@ if __name__ == '__main__':
             plot_structure_changes(transformations_2, 
                                 smoothed_density_fields[len(smoothed_density_fields)//2], 
                                 truncated_scales, new_directory_path, slice_thickness, projection, unique_num=2)
+            
+            logging.info("Note: The filename as 'Classification_change_Rs1_Rs2_1.png' indicates the changes in classification of "\
+                         "Halo environments between two smoothing scales Rs1 and Rs2.\n")
 
         else: 
             logging.info('Volume fraction plot requires more than one smoothing scale to compare.')

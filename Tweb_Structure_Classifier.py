@@ -23,11 +23,14 @@ Instructions:
 
 #----------------------------------------- IMPORT LIBRARIES ----------------------------------------------#
 
+from tqdm import tqdm
+
 import os
 import time
-from tqdm import tqdm
-from LSS_TWeb_BlackBox import *
 import logging
+
+from LSS_TWeb_BlackBox import *
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

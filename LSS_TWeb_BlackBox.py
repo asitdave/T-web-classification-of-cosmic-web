@@ -40,6 +40,7 @@ from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import smoothing_library as SL
+
 import os
 import shutil
 import logging
@@ -421,7 +422,7 @@ def plot_field(input_field: np.ndarray, sm_scale: float, projection: str, slice_
     plt.axis('off')
     plt.title(r'$R_s = $' + f'{sm_scale}' + r'$~h^{-1} Mpc$')
     
-    save_path = os.path.join(filepath, f'{projection}_plane_{name_sm_scale}.png')
+    save_path = os.path.join(filepath, f'density_field_{projection}_plane_{name_sm_scale}.png')
     plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
 
 #-------------------------------------------------------------------------------------------------------------#
